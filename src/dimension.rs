@@ -390,23 +390,17 @@ impl DimensionalAnalysable for [&Dimension] {
     fn exponents_to(&self, other: &Dimension) -> Result<Box<[f64]>> {
         let dimension: Box<[&Dimension]> = self.iter().map(|&quantity| quantity).chain(once(other)).collect();
         let rows: Box<[Box<[f64]>]> = dimension.exponents();
-        match RectangularMatrix::try_from(rows) {
-            Err(error) => return Err(DimensionError::UnconvertableDimensionsError {
+        let unconvertable_dimensions_error = |error|
+            DimensionError::UnconvertableDimensionsError {
                 base_dimensions: self.iter().cloned().cloned().collect(),
                 target_dimension: other.clone(),
-                bareiss_eliminator_error: error
-            }),
-            Ok(rectangular_matrix) => {
-                match rectangular_matrix.switch_dimensions().bareiss_solve() {
-                    Err(error) => return Err(DimensionError::UnconvertableDimensionsError {
-                        base_dimensions: self.iter().cloned().cloned().collect(),
-                        target_dimension: other.clone(),
-                        bareiss_eliminator_error: error
-                    }),
-                    Ok(exponents) => return Ok(exponents)
-                }
-            }
-        }
+                bareiss_eliminator_error: error,
+            };
+        RectangularMatrix::try_from(rows)
+            .or_else(|error| Err(unconvertable_dimensions_error(error)))?
+            .switch_dimensions()
+            .bareiss_solve()
+            .or_else(|error| Err(unconvertable_dimensions_error(error)))
     }
     fn all_exponents_to(&self, others: &[&Dimension]) -> Result<Box<[Box<[f64]>]>> {
         others.iter().map(|other| self.exponents_to(other)).collect()
