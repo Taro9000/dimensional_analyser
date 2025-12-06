@@ -31,14 +31,13 @@ mod tests {
     use crate::{debug_println, dimension::{DeepDereferrenceable, DimensionalAnalysable}, dimensions::the_seven_c_s::base_units::BASE_UNITS};
     #[test]
     fn coherency_of_system() {
-        let base_units = &BASE_UNITS;
-        let exponents = base_units.get().coherent_system7().expect("The seven c's system should be coherent");
-        debug_println!("The unit for mass:                {}", base_units.get().product_of_powers(&exponents[0]));
-        debug_println!("The unit for length:              {}", base_units.get().product_of_powers(&exponents[1]));
-        debug_println!("The unit for time:                {}", base_units.get().product_of_powers(&exponents[2]));
-        debug_println!("The unit for electrical current:  {}", base_units.get().product_of_powers(&exponents[3]));
-        debug_println!("The unit for temperature:         {}", base_units.get().product_of_powers(&exponents[4]));
-        debug_println!("The unit for ammount of particles:{}", base_units.get().product_of_powers(&exponents[5]));
-        debug_println!("The unit for luminous intensity:  {}", base_units.get().product_of_powers(&exponents[6]));
+        let exponents = BASE_UNITS.get().coherent_system7().expect("The seven c's system should be coherent");
+        debug_println!("The unit for mass:                {}", BASE_UNITS.get().product_of_powers(&exponents[0]));
+        debug_println!("The unit for length:              {}", BASE_UNITS.get().product_of_powers(&exponents[1]));
+        debug_println!("The unit for time:                {}", BASE_UNITS.get().product_of_powers(&exponents[2]));
+        debug_println!("The unit for electrical current:  {}", BASE_UNITS.get().product_of_powers(&exponents[3]));
+        debug_println!("The unit for temperature:         {}", BASE_UNITS.get().product_of_powers(&exponents[4]));
+        debug_println!("The unit for ammount of particles:{}", BASE_UNITS.get().product_of_powers(&exponents[5]));
+        debug_println!("The unit for luminous intensity:  {}", BASE_UNITS.get().product_of_powers(&exponents[6]));
     }
 }

@@ -1,15 +1,15 @@
+//! Provides some arithmetic and conversion between [`Dimension`]'s expressed in arbitrary units.
+use core::f32;
 use std::error::Error;
 use std::fmt::{Display, Formatter, self};
 use std::iter::{once, Product};
 use std::ops::{Div, Mul};
-use std::result;
 pub use std::sync::LazyLock;
-
 use crate::bareiss_eliminator::{BareissEliminatorError, RectangularMatrix};
 
-/// A detailed breakdown of the error occurred when handling [`Dimension`]s.
+/// A detailed breakdown of the error occurred when getting the conversion exponent from one [`Dimension`]s to another one.
 #[derive(Debug, Clone, PartialEq)]
-pub enum DimensionError {
+pub enum ConversionExponentError {
     /// Error when both [`Dimension`]s don't have a pair where both exponents are non-zero.
     NoNonZeroExponentPair {
         /// The [`Dimension`] that was trying to be converted from.
@@ -32,58 +32,83 @@ pub enum DimensionError {
         /// The found ratio of the exponent pair that didn't fit the expected.
         found: f64,
     },
-    /// Error when the base [`Dimension`]s can't be converted to the target [`Dimension`].
-    UnconvertableDimensionsError {
-        /// The [`Dimension`]s that were trying to be converted from.
-        base_dimensions: Vec<Dimension>,
-        /// The [`Dimension`] that wea trying to be converted to.
-        target_dimension: Dimension,
-        /// The rest of the error details.
-        bareiss_eliminator_error: BareissEliminatorError,
-    },
 }
-impl Display for DimensionError {
+impl Display for ConversionExponentError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
             Self::NoNonZeroExponentPair { left_dimension, right_dimension } =>
                 write!(f, "No exponent pair was found where both sides are nonzero: {left_dimension} and {right_dimension}"),
             Self::InconsistentExponentRatio { left_dimension, right_dimension, right, left, expected, found } =>
                 write!(f, "Inconsistent ratio exponent between {left_dimension} and {right_dimension}: expected {right}/{left} to be {expected} but found {found}"),
-            Self::UnconvertableDimensionsError { base_dimensions, target_dimension, bareiss_eliminator_error } =>
-                write!(f, "Couldn't convert from {} to {target_dimension}. {bareiss_eliminator_error}", Dimensions(base_dimensions)),
         }
     }
 }
-impl Error for DimensionError {}
+impl Error for ConversionExponentError {}
 
-/// The result of operations regarding [`Dimension`]s.
-pub type Result<T> = result::Result<T, DimensionError>;
+/// Error when the base [`Dimension`]s can't be converted to the target [`Dimension`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnconvertableDimensionsError {
+    base_dimensions: Vec<Dimension>,
+    target_dimension: Dimension,
+    bareiss_eliminator_error: BareissEliminatorError,
+}
+impl Display for UnconvertableDimensionsError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let Self { base_dimensions, target_dimension, bareiss_eliminator_error } = self;
+        write!(f, "Couldn't convert from {} to {target_dimension}. {bareiss_eliminator_error}", Dimensions(base_dimensions))
+    }
+}
+impl Error for UnconvertableDimensionsError {}
 
-#[allow(missing_docs)]
+/// The SI decimal prefixes with exact powers of ten.
 pub enum Prefix {
+    /// 10^30 `1e30`.
     Quetta,
+    /// 10^27 `1e27`.
     Ronna,
+    /// 10^24 `1e24`.
     Yotta,
+    /// 10^21 `1e21`.
     Zetta,
+    /// 10^18 `1e18`.
     Exa,
+    /// 10^15 `1e15`.
     Peta,
+    /// 10^12 `1e12`.
     Tera,
+    /// 10^9 `1e9`.
     Giga,
+    /// 10^6 `1e6`.
     Mega,
+    /// 10^3 `1e3`.
     Kilo,
+    /// 10^2 `1e2`.
     Hecto,
+    /// 10^1 `1e1`.
     Deca,
+    /// 10^-1 `1e-1`.
     Deci,
+    /// 10^-2 `1e-2`.
     Centi,
+    /// 10^-3 `1e-3`.
     Milli,
+    /// 10^-6 `1e-6`.
     Micro,
+    /// 10^-9 `1e-9`.
     Nano,
+    /// 10^-12 `1e-12`.
     Pico,
+    /// 10^-15 `1e-15`.
     Femto,
+    /// 10^-18 `1e-18`.
     Atto,
+    /// 10^-21 `1e-21`.
     Zepto,
+    /// 10^-24 `1e-24`.
     Yocto,
+    /// 10^-27 `1e-27`.
     Ronto,
+    /// 10^-30 `1e-30`.
     Quecto,
 }
 
@@ -95,12 +120,12 @@ pub struct Dimension {
     exponents: Box<[(String, f64)]>,
 }
 impl Dimension {
-    /// Returns the [`Dimension`]’s `scaling_factor`.
+    /// Returns the [`Dimension`]s `scaling_factor`.
     #[must_use]
     pub const fn scaling_factor(&self) -> &f64 {
         &self.scaling_factor
     }
-    /// Returns the [`Dimension`]’s base exponents.
+    /// Returns the [`Dimension`]s base exponents.
     #[must_use]
     pub const fn exponents(&self) -> &[(String, f64)] {
         &self.exponents
@@ -187,19 +212,21 @@ impl Dimension {
         })
     }
     /// Computes the exponent ratio needed to convert `self` to `other`.
-    pub fn get_conversion_exponent(&self, other: &Dimension) -> Result<f64> {
+    /// # Errors
+    /// - [`ConversionExponentError::NoNonZeroExponentPair`] when there is not a pair with both of the numbers not being zero.
+    /// - [`ConversionExponentError::InconsistentExponentRatio`] when there is a pair with a different exponent ratio from the first.
+    pub fn get_conversion_exponent(&self, other: &Self) -> Result<f64, ConversionExponentError> {
         let exponents = [self, other].exponents();
         let mut unit_iter = exponents[0].iter().zip(exponents[1].iter());
         let exponent: f64 = loop {
             match unit_iter.next() {
                 Some((left, right)) => {
-                    #[allow(clippy::float_cmp)]
-                    if left != &0.0 && right != &0.0 {
+                    if left.abs() > f64::from(f32::EPSILON) && right.abs() > f64::from(f32::EPSILON) {
                         break right / left
                     }
                 }
                 None => {
-                    return Err(DimensionError::NoNonZeroExponentPair {
+                    return Err(ConversionExponentError::NoNonZeroExponentPair {
                         left_dimension: self.clone(),
                         right_dimension: other.clone()
                     });
@@ -207,9 +234,8 @@ impl Dimension {
             }
         };
         for (&left, &right) in unit_iter {
-            #[allow(clippy::float_cmp)]
-            if left != 0.0 && right != 0.0 && right / left != exponent {
-                return Err(DimensionError::InconsistentExponentRatio {
+            if left.abs() > f64::from(f32::EPSILON) && right != 0.0 && (dbg!(right / left / exponent) - 1.).abs() > f64::from(f32::EPSILON) {
+                return Err(ConversionExponentError::InconsistentExponentRatio {
                     left_dimension: self.clone(),
                     right_dimension: other.clone(),
                     right,
@@ -231,8 +257,8 @@ impl PartialEq for Dimension {
 
 /// A helper struct to show multiple [`Dimension`]s is a concise manner.
 pub struct Dimensions<'a>(pub &'a Vec<Dimension>);
-impl std::fmt::Display for Dimensions<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Dimensions<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "[{}]", self
             .0
             .iter()
@@ -262,17 +288,15 @@ macro_rules! uwrite {
 }
 impl Display for Dimension {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        #[allow(clippy::float_cmp)]
-        if self.scaling_factor != 1.0 {
+        if (self.scaling_factor - 1.0).abs() > f64::from(f32::EPSILON) {
             uwrite!(f, "* {} ", self.scaling_factor)?;
         }
         write!(f, "{}", self
             .exponents
             .iter()
-            .filter(#[allow(clippy::float_cmp)] |(_, unit)| unit != &0.0)
+            .filter(|(_, unit)| unit.abs() > f64::from(f32::EPSILON))
             .map(|(name, unit)| {
-                #[allow(clippy::float_cmp)]
-                if unit == &1.0 {
+                if (unit - 1.0).abs() < f64::from(f32::EPSILON) {
                     name.to_string()
                 } else {
                     format!("{name}^{unit}")
@@ -338,24 +362,33 @@ impl DeepDereferrenceable for LazyLock<Box<[&LazyLock<Dimension>]>> {
 }
 
 /// Provides the capability to analysis capabilities for [`Dimension`]s.
-#[allow(unused)]
 pub trait DimensionalAnalysable {
     /// Processes the exponents for them to be comparable.
     fn exponents(&self) -> Box<[Box<[f64]>]>;
     /// Returns wether all [`Dimension`]s' exponents are equal.
     fn have_same_exponents(&self) -> bool;
     /// Computes the exponents required for each [`Dimension`] in order to be converted to the target [`Dimension`].
-    fn exponents_to(&self, other: &Dimension) -> Result<Box<[f64]>>;
+    /// # Errors
+    /// [`UnconvertableDimensionsError`] when the base Dimensions can't be converted to the target [`Dimension`].
+    fn exponents_to(&self, other: &Dimension) -> Result<Box<[f64]>, UnconvertableDimensionsError>;
     /// Computes all the exponents required for each [`Dimension`] in order to be converted to each target [`Dimension`] separately.
-    fn all_exponents_to(&self, others: &[&Dimension]) -> Result<Box<[Box<[f64]>]>>;
+    /// # Errors
+    /// [`UnconvertableDimensionsError`] when the base Dimensions can't be converted to the target [`Dimension`]s.
+    fn all_exponents_to(&self, others: &[&Dimension]) -> Result<Box<[Box<[f64]>]>, UnconvertableDimensionsError>;
     /// Returns the combined [`Dimension`] obtained by multiplying each [`Dimension`] by its corresponding power in `others`.
     fn product_of_powers(&self, others: &[f64]) -> Dimension;
     /// Uses `exponents_to` to figure out if a set of [`Dimension`]s is coherent by covnerting them to each of the 7 base SI units (M, L, T, I, Θ, N, J)
-    fn coherent_system7(&self) -> Result<Box<[Box<[f64]>]>>;
+    /// # Errors
+    /// [`UnconvertableDimensionsError`] when the base Dimensions can't be converted to the seven base SI units.
+    fn coherent_system7(&self) -> Result<Box<[Box<[f64]>]>, UnconvertableDimensionsError>;
     /// Uses `exponents_to` to figure out if a set of [`Dimension`]s is coherent by covnerting them to 5 base SI units (M, L, T, I, Θ)
-    fn coherent_system5(&self) -> Result<Box<[Box<[f64]>]>>;
+    /// # Errors
+    /// [`UnconvertableDimensionsError`] when the base Dimensions can't be converted to the five base SI units.
+    fn coherent_system5(&self) -> Result<Box<[Box<[f64]>]>, UnconvertableDimensionsError>;
     /// Uses `exponents_to` to figure out if a set of [`Dimension`]s is coherent by covnerting them to 7 base SI units (M, L, T)
-    fn coherent_system3(&self) -> Result<Box<[Box<[f64]>]>>;
+    /// # Errors
+    /// [`UnconvertableDimensionsError`] when the base Dimensions can't be converted to the three base SI units.
+    fn coherent_system3(&self) -> Result<Box<[Box<[f64]>]>, UnconvertableDimensionsError>;
 }
 use crate::dimensions::le_systeme_international_d_unites::base_units::{AMPERE, CANDELA, KELVIN, KILOGRAM, METER, MOLE, SECOND};
 use crate::{dimension};
@@ -392,34 +425,38 @@ impl DimensionalAnalysable for [&Dimension] {
         let first_exponents = &all_exponents[0];
         all_exponents.iter().all(|exponents| exponents == first_exponents)
     }
-    fn exponents_to(&self, other: &Dimension) -> Result<Box<[f64]>> {
+    fn exponents_to(&self, other: &Dimension) -> Result<Box<[f64]>, UnconvertableDimensionsError> {
         let dimension: Box<[&Dimension]> = self.iter().chain(once(&other)).copied().collect();
-        let rows: Box<[Box<[f64]>]> = dimension.exponents();
-        let unconvertable_dimensions_error = |error|
-            DimensionError::UnconvertableDimensionsError {
-                base_dimensions: self.iter().copied().cloned().collect(),
-                target_dimension: other.clone(),
-                bareiss_eliminator_error: error,
+        let rows: &[Box<[f64]>] = &dimension.exponents();
+        macro_rules! unconvertable_dimensions_error {
+            () => {
+                |error|
+                UnconvertableDimensionsError {
+                    base_dimensions: self.iter().copied().cloned().collect(),
+                    target_dimension: other.clone(),
+                    bareiss_eliminator_error: error.into(),
+                }
             };
+        }
         RectangularMatrix::try_from(rows)
-            .map_err(unconvertable_dimensions_error)?
+            .map_err(unconvertable_dimensions_error!())?
             .switch_dimensions()
             .bareiss_solve()
-            .map_err(unconvertable_dimensions_error)
+            .map_err(unconvertable_dimensions_error!())
     }
-    fn all_exponents_to(&self, others: &[&Dimension]) -> Result<Box<[Box<[f64]>]>> {
+    fn all_exponents_to(&self, others: &[&Dimension]) -> Result<Box<[Box<[f64]>]>, UnconvertableDimensionsError> {
         others.iter().map(|other| self.exponents_to(other)).collect()
     }
     fn product_of_powers(&self, rows: &[f64]) -> Dimension {
         rows.iter().enumerate().map(|(index, &power)| self[index].power(power)).product()
     }
-    fn coherent_system7(&self) -> Result<Box<[Box<[f64]>]>> {
+    fn coherent_system7(&self) -> Result<Box<[Box<[f64]>]>, UnconvertableDimensionsError> {
         self.all_exponents_to(&[&KILOGRAM, &METER, &SECOND, &AMPERE, &KELVIN, &MOLE, &CANDELA])
     }
-    fn coherent_system5(&self) -> Result<Box<[Box<[f64]>]>> {
+    fn coherent_system5(&self) -> Result<Box<[Box<[f64]>]>, UnconvertableDimensionsError> {
         self.all_exponents_to(&[&KILOGRAM, &METER, &SECOND, &AMPERE, &KELVIN])
     }
-    fn coherent_system3(&self) -> Result<Box<[Box<[f64]>]>> {
+    fn coherent_system3(&self) -> Result<Box<[Box<[f64]>]>, UnconvertableDimensionsError> {
         self.all_exponents_to(&[&KILOGRAM, &METER, &SECOND])
     }
 }

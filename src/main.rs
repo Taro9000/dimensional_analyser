@@ -1,5 +1,5 @@
-use dimensional_analyser::{dim, dimension::{DIMENSIONLESS, Dimension, Prefix}, dimensions::le_systeme_international_d_unites::{HOUR, JOULE, LITER, MINUTE, base_units::{KILOGRAM, METER, SECOND}}, quantity::{DimensionalAnalysableQuantity, Quantity, Result}};
-fn main() -> Result<()> {
+use dimensional_analyser::{Result, dim, dimension::{DIMENSIONLESS, Dimension, Prefix}, dimensions::le_systeme_international_d_unites::{HOUR, JOULE, LITER, MINUTE, base_units::{KILOGRAM, METER, SECOND}}, quantity::{DimensionalAnalysableQuantity, Quantity}};
+fn main() -> Result {
     let height       = Quantity::new(5 , dim!(METER));
     println!("Height:       {height}");
     let mass         = Quantity::new(15, dim!(KILOGRAM));

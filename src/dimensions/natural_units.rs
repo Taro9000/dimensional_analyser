@@ -14,7 +14,6 @@ pub mod base_units {
     dimension!(BOLTZMANN_CONSTANT =;1.380_649e-23;JOULE KELVIN^-1 "`k_B`");
     
     /// The five fundamental constants as base units.
-    #[allow(dead_code)]
     pub static BASE_UNITS: LazyLock<Box<[&LazyLock<Dimension>]>> = LazyLock::new(|| [
         &C_AS_THE_SPEED_OF_LIGHT, &REDUCED_PLANCK_CONSTANT, &GRAVITATIONAL_CONSTANT,
         &VACUUM_PERMITTIVITY, &BOLTZMANN_CONSTANT

@@ -1,3 +1,5 @@
+//! The module containing the different unit systems.
+
 pub mod le_systeme_international_d_unites;
 pub mod drunk_mathematician_units;
 pub mod centimeter_gram_second_units;

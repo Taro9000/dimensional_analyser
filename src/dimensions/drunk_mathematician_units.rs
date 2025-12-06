@@ -15,7 +15,6 @@ pub mod base_units {
     dimension!(POUND =;0.453_592_37;KILOGRAM "`0.453_592_37` [`KILOGRAM`]s");
     
     /// The three base units.
-    #[allow(dead_code)]
     pub static BASE_UNITS: LazyLock<Box<[&LazyLock<Dimension>]>> = LazyLock::new(|| [&FOOT, &POUND, &SECOND].into());
 }
 

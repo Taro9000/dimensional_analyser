@@ -3,6 +3,8 @@
 use crate::dimensions::le_systeme_international_d_unites::base_units::{AMPERE, CANDELA, KILOGRAM, METER, MOLE, SECOND};
 use crate::dimension;
 use crate::dimension::Dimension;
+#[allow(unused_imports)]
+use crate::dimension::Prefix::{Centi, Deci};
 
 /// The SI defines what a coherent system of units means in the context of this library - built on seven base units.
 pub mod base_units {
@@ -18,7 +20,6 @@ pub mod base_units {
     dimension!(CANDELA "Unit of luminous intensity.");
     
     /// The seven base units.
-    #[allow(dead_code)]
     pub static BASE_UNITS: LazyLock<Box<[&LazyLock<Dimension>]>> = LazyLock::new(|| [&KILOGRAM, &METER, &SECOND, &AMPERE, &KELVIN, &MOLE, &CANDELA].into());
 }
 

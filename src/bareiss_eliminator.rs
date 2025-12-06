@@ -1,35 +1,70 @@
 use std::{
-    error::Error, fmt::{self, Display, Formatter}, iter::repeat, ops::{
+    error::Error, fmt::{self, Display, Formatter}, iter::repeat_n, ops::{
         Index,
         IndexMut,
         Range,
         RangeFrom
-    }, result
+    }
 };
 
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum BareissEliminatorError {
-    UnrectangularMatrix,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnrectangularMatrixError;
+impl Display for UnrectangularMatrixError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "The matrix isn't rectangular")
+    }
+}
+impl Error for UnrectangularMatrixError {}
+
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BareissSolverError {
     SingularPivot { column: usize },
     RankDeficient { expected: usize, found: usize },
+}
+impl Display for BareissSolverError {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            Self::SingularPivot { column } =>
+                write!(f, "No pivot found at column {column}"),
+            Self::RankDeficient { expected, found } =>
+                write!(f, "Expected {expected} ranks, got {found}"),
+        }
+    }
+}
+impl Error for BareissSolverError {}
+
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BareissEliminatorError {
+    UnrectangularMatrix(UnrectangularMatrixError),
+    BareissSolver(BareissSolverError),
 }
 impl Display for BareissEliminatorError {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match self {
-            Self::UnrectangularMatrix =>
-                write!(f, "The matrix isn't rectangular"),
-            Self::SingularPivot { column } =>
-                write!(f, "No pivot found at column {}", column),
-            Self::RankDeficient { expected, found } =>
-                write!(f, "Expected {} ranks, got {}", expected, found),
+            Self::UnrectangularMatrix(unrectangular_matrix_error) =>
+                write!(f, "{unrectangular_matrix_error}"),
+            Self::BareissSolver(bareiss_solver_error) =>
+                write!(f, "{bareiss_solver_error}"),
         }
     }
 }
-
+impl From<UnrectangularMatrixError> for BareissEliminatorError {
+    fn from(value: UnrectangularMatrixError) -> Self {
+        Self::UnrectangularMatrix(value)
+    }
+}
+impl From<BareissSolverError> for BareissEliminatorError {
+    fn from(value: BareissSolverError) -> Self {
+        Self::BareissSolver(value)
+    }
+}
 impl Error for BareissEliminatorError {}
-pub type Result<T> = result::Result<T, BareissEliminatorError>;
 
+
+/// A helper macro that only prints with the `debug-print` fature enabled.
 #[macro_export]
 macro_rules! debug_println {
     ($($arg:tt)*) => {
@@ -44,28 +79,22 @@ macro_rules! debug_println {
 pub struct RectangularMatrix {
     rows: Box<[Box<[f64]>]>,
 }
-impl TryFrom<&[&[f64]]> for RectangularMatrix {
-    type Error = BareissEliminatorError;
-    fn try_from(value: &[&[f64]]) -> Result<Self> {
-        if !value[1..].iter().all(|row| row.len() == value[0].len()) {
-            return Err(BareissEliminatorError::UnrectangularMatrix)
+impl<T> TryFrom<&[T]> for RectangularMatrix
+where
+    T: AsRef<[f64]>,
+{
+    type Error = UnrectangularMatrixError;
+    fn try_from(value: &[T]) -> Result<Self, UnrectangularMatrixError> {
+        if !value[1..].iter().all(|row| row.as_ref().len() == value[0].as_ref().len()) {
+            return Err(UnrectangularMatrixError)
         }
         Ok(Self {
-            rows: value.iter().map(|&row| row.into()).collect()
+            rows: value.iter().map(|row| row.as_ref().into()).collect()
         })
     }
 }
-impl TryFrom<Box<[Box<[f64]>]>> for RectangularMatrix {
-    type Error = BareissEliminatorError;
-    fn try_from(value: Box<[Box<[f64]>]>) -> Result<Self> {
-        if !value[1..].iter().all(|row| row.len() == value[0].len()) {
-            return Err(BareissEliminatorError::UnrectangularMatrix)
-        }
-        Ok(Self {
-            rows: value
-        })
-    }
-}
+
+type List = Box<[f64]>;
 impl RectangularMatrix {
     pub fn switch_dimensions(&self) -> Self {
         Self {
@@ -76,16 +105,16 @@ impl RectangularMatrix {
     fn len(&self) -> usize {
         self.rows.len()
     }
-    fn split_at_mut(&mut self, mid: usize) -> (&mut [Box<[f64]>], &mut [Box<[f64]>]) {
+    fn split_at_mut(&mut self, mid: usize) -> (&mut [List], &mut [List]) {
         self.rows.split_at_mut(mid)
     }
     fn swap(&mut self, a: usize, b: usize) {
-        self.rows.swap(a, b)
+        self.rows.swap(a, b);
     }
     fn iter(&self) -> std::slice::Iter<'_, Box<[f64]>> {
         self.rows.iter()
     }
-    pub fn bareiss_solve(&mut self) -> Result<Box<[f64]>> {
+    pub fn bareiss_solve(&mut self) -> Result<Box<[f64]>, BareissSolverError> {
         let size = self[0].len();
 
         for index in 0..self[0].len() - 1 {
@@ -97,7 +126,7 @@ impl RectangularMatrix {
                         self.swap(index, valid_row_index + index + 1);
                     }
                     None => {
-                        return Err(BareissEliminatorError::SingularPivot { column: index })
+                        return Err(BareissSolverError::SingularPivot { column: index })
                     }
                 }
                 // debug_println!("Swapped: {:?}", self.rows);
@@ -113,23 +142,23 @@ impl RectangularMatrix {
                 let next_element = &mut next_left_elements[index];
 
                 for (prev_right_element, next_right_element) in prev_right_elements.iter().zip(next_right_elements) {
-                    *next_right_element = (prev_element * *next_right_element) - (prev_right_element * *next_element);
+                    *next_right_element = prev_element.mul_add(*next_right_element, -(prev_right_element * *next_element));
                 }
                 *next_element = 0.0;
             }
         };
-        let last_index = self.len() - self.iter().rev().position(|row| !row.iter().all(|element| element == &0.0)).unwrap();
+        let last_index = self.len() - self.iter().rev().position(|row| !row.iter().all(|element| element.abs() < f64::from(f32::EPSILON))).unwrap();
         // debug_println!("Finally: {:?}", self.split_at(last_index).0);
         if size != last_index + 1 {
-            return Err(BareissEliminatorError::RankDeficient { expected: size, found: last_index + 1 })
+            return Err(BareissSolverError::RankDeficient { expected: size, found: last_index + 1 })
         }
 
-        let mut solutions: Box<[f64]> = repeat(0.0).take(size - 1).collect();
+        let mut solutions: Box<[f64]> = repeat_n(0.0, size - 1).collect();
         for index in (0..size - 1).rev() {
             solutions[index] = (self[index][size - 1] - (index + 1..size - 1).map(|inner_index| self[index][inner_index] * solutions[inner_index]).sum::<f64>()) / self[index][index];
         }
 
-        return Ok(solutions)
+        Ok(solutions)
     }
 }
 impl Index<usize> for RectangularMatrix {
@@ -164,14 +193,14 @@ mod tests {
         bareiss_eliminator::*, dimension::DimensionalAnalysable, dimensions::le_systeme_international_d_unites::{JOULE, base_units::{AMPERE, KILOGRAM, METER, SECOND}}
     }};
 
-    fn test_solvable(rows: &[&[f64]], solution: Box<[f64]>) {
-        assert_eq!((&mut RectangularMatrix::try_from(rows).expect("Sould be a rectanglar matrix")).bareiss_solve().expect("Should be solvable"), solution)
+    fn test_solvable(rows: &[&[f64]], solution: &[f64]) {
+        assert_eq!(RectangularMatrix::try_from(rows).expect("Sould be a rectanglar matrix").bareiss_solve().expect("Should be solvable").as_ref(), solution);
     }
-    fn test_unsolvable(rows: &[&[f64]], error: BareissEliminatorError) {
-        assert_eq!((&mut RectangularMatrix::try_from(rows).expect("Should be rectanglar matrix")).bareiss_solve(), Err(error))
+    fn test_unsolvable(rows: &[&[f64]], error: BareissSolverError) {
+        assert_eq!(RectangularMatrix::try_from(rows).expect("Should be rectanglar matrix").bareiss_solve(), Err(error));
     }
     fn test_unrectangular_matrix(rows: &[&[f64]]) {
-        assert_eq!(RectangularMatrix::try_from(rows), Err(BareissEliminatorError::UnrectangularMatrix))
+        assert_eq!(RectangularMatrix::try_from(rows), Err(UnrectangularMatrixError));
     }
 
     #[test]
@@ -181,7 +210,7 @@ mod tests {
         test_solvable(&[
             &[0.0, 1.0, 2.0],
             &[1.0, 0.0, 3.0]
-        ], [3.0, 2.0].into());
+        ], &[3.0, 2.0]);
     }
 
     #[test]
@@ -191,7 +220,7 @@ mod tests {
         test_unsolvable(&[
             &[1.0, 1.0, 3.0],
             &[2.0, 2.0, 4.0]
-        ], BareissEliminatorError::SingularPivot { column: 1 });
+        ], BareissSolverError::SingularPivot { column: 1 });
     }
 
     #[test]
@@ -205,7 +234,7 @@ mod tests {
             &[2.0, 4.0],
             &[-4.0, -4.0],
             &[-2.0, -4.0]
-        ], BareissEliminatorError::RankDeficient { expected: 2, found: 4 });
+        ], BareissSolverError::RankDeficient { expected: 2, found: 4 });
     }
 
     #[test]
@@ -217,7 +246,7 @@ mod tests {
             &[1.0, 0.0, 1.0, 0.0],
             &[2.0, 0.0, -3.0, 1.0],
             &[-2.0, 1.0, 0.0, 0.0]
-        ], [0.2, 0.4, -0.2].into());
+        ], &[0.2, 0.4, -0.2]);
     }
 
     #[test]
@@ -229,7 +258,7 @@ mod tests {
             &[-1.0, -2.0],
             &[2.0, 4.0],
             &[-2.0, -4.0]
-        ], [2.0].into())
+        ], &[2.0]);
     }
 
     #[test]
@@ -241,7 +270,7 @@ mod tests {
             &[1.0, 0.0, 0.0, 1.0],
             &[0.0, 1.0, 0.0, 2.0],
             &[0.0, 0.0, 1.0, 3.0],
-        ], [1.0, 2.0, 3.0].into())
+        ], &[1.0, 2.0, 3.0]);
     }
 
     #[test]
@@ -251,7 +280,7 @@ mod tests {
         test_unsolvable(&[
             &[0.0, 0.0, 0.0],
             &[0.0, 0.0, 0.0],
-        ], BareissEliminatorError::SingularPivot { column: 0 })
+        ], BareissSolverError::SingularPivot { column: 0 });
     }
 
     #[test]
@@ -263,7 +292,7 @@ mod tests {
             &[1.0, 1.0, 2.0],
             &[2.0, 2.0, 4.0],
             &[-3.0, -2.0, -2.0],
-        ], [-2.0, 4.0].into())
+        ], &[-2.0, 4.0]);
     }
 
     #[test]
@@ -273,17 +302,17 @@ mod tests {
         test_unsolvable(&[
             &[1.0, 1.0, 1.0, 1.0],
             &[2.0, 2.0, 2.0, 2.0],
-        ], BareissEliminatorError::SingularPivot { column: 1 })
+        ], BareissSolverError::SingularPivot { column: 1 });
     }
 
     #[test]
     fn non_rectangle_input() {
         // x + y = 2
         // x = 1 ???
-        test_unrectangular_matrix(&mut[
-            &mut[1.0, 1.0, 2.0],
-            &mut[1.0, 1.0],
-        ])
+        test_unrectangular_matrix(&[
+            &[1.0, 1.0, 2.0],
+            &[1.0, 1.0],
+        ]);
     }
 
     #[test]
@@ -295,7 +324,7 @@ mod tests {
         let meter = dim!(METER);
         let rows = [joule, second, density, ampere_per_meter, meter].exponents();
         debug_println!("{:?}", rows);
-        let rows_matrix = RectangularMatrix::try_from(rows).expect("Already rectangular");
+        let rows_matrix = RectangularMatrix::try_from(rows.as_ref()).expect("Already rectangular");
         debug_println!("{:?}", rows_matrix.rows);
         let mut rows_corrected_matrix = rows_matrix.switch_dimensions();
         debug_println!("{:?}", rows_corrected_matrix.rows);

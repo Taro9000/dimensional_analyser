@@ -4,8 +4,9 @@
 //! 
 //! # Example usage
 //! ```
-//! use dimensional_analyser::{dim, dimension::{Dimension, DIMENSIONLESS}, dimensions::le_systeme_international_d_unites::{base_units::{KILOGRAM, METER, SECOND}, HOUR, JOULE, MINUTE, LITER}, quantity::{DimensionalAnalysableQuantity, Quantity, Result}};
-//! fn main() -> Result<()> {
+//! use dimensional_analyser::{Result, dim, dimension::{DIMENSIONLESS, Dimension, Prefix}, dimensions::le_systeme_international_d_unites::{HOUR, JOULE, LITER, MINUTE, base_units::{KILOGRAM, METER, SECOND}}, quantity::{DimensionalAnalysableQuantity, Quantity}};
+//! 
+//! fn main() -> Result {
 //!     let height       = Quantity::new(5 , dim!(METER));
 //!     println!("Height:       {}", height);
 //!     let mass         = Quantity::new(15, dim!(KILOGRAM));
@@ -39,8 +40,54 @@
 //! ```
 #![warn(missing_docs)]
 
+use std::fmt::{self, Display, Formatter};
+
+#[allow(unused)]
+use crate::{dimension::{ConversionExponentError, Dimension, UnconvertableDimensionsError}, quantity::{DifferentDimensionError, UnconvertableQuantitiesError, UnconvertableQuantityError, Quantity}};
+
 pub mod quantity;
 pub mod dimension;
 mod bareiss_eliminator;
 
 pub mod dimensions;
+
+/// The type returned the the `main` function
+pub type Result = std::result::Result<(), Error>;
+
+macro_rules! error_enum {
+    ($(#[doc = $doc:literal] $variant:ident($error:ident))*) => {
+        /// An error enum that encompasses every error in this library
+        #[derive(Debug, Clone, PartialEq)]
+        pub enum Error { $(
+            #[doc = $doc]
+            $variant($error),
+        )* }
+        impl Display for Error {
+            fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+                match self {
+                    $(Self::$variant(error) =>
+                        write!(f, "{error}"),)*
+                }
+            }
+        }
+        $(impl From<$error> for Error {
+            fn from(value: $error) -> Self {
+                Self::$variant(value)
+            }
+        })*
+    };
+}
+
+error_enum! {
+    /// A detailed breakdown of the error occurred when getting the conversion exponent from one [`Dimension`]s to another one.
+    ConversionExponent(ConversionExponentError)
+    /// Error when the base [`Dimension`]s can't be converted to the target [`Dimension`].
+    UnconvertableDimensions(UnconvertableDimensionsError)
+    /// Error when a single [`Quantity`] can't be converted to a [`Dimension`].
+    UnconvertableQuantity(UnconvertableQuantityError)
+    /// Error when multiple [`Quantity`]s can't be converted to a [`Dimension`].
+    UnconvertableQuantities(UnconvertableQuantitiesError)
+    /// Error when both [`Dimension`]s are incompatible.
+    DifferentDimension(DifferentDimensionError)
+}
+impl std::error::Error for Error {}

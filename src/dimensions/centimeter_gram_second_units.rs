@@ -8,13 +8,14 @@ use crate::dimensions::le_systeme_international_d_unites::base_units::{KILOGRAM,
 
 /// Conatins the three base units.
 pub mod base_units {
+    #[allow(unused_imports)]
+    use crate::dimension::Prefix::Centi;
     use super::{dimension, KILOGRAM, METER, LazyLock, Dimension, SECOND};
     
     dimension!(,1000,GRAM = KILOGRAM "`1000` in a [`KILOGRAM`]");
     dimension!(CENTI_METER =,Centi METER "[`Centi`] [`METER`]");
     
     /// The three base units.
-    #[allow(dead_code)]
     pub static BASE_UNITS: LazyLock<Box<[&LazyLock<Dimension>]>> = LazyLock::new(|| [&GRAM, &CENTI_METER, &SECOND].into());
 }
 
