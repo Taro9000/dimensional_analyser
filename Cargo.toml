@@ -2,6 +2,13 @@
 name = "dimensional_analyser"
 version = "0.1.0"
 edition = "2024"
+description = "Runtime dimensional analysis and unit-aware quantities for Rust"
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/Taro9000/dimensional_analyser"
+documentation = "https://docs.rs/dimensional_analyser"
+keywords = ["dimensions", "units", "physics", "quantity", "conversion"]
+categories = ["science/physics", "science/math"]
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1}
@@ -11,6 +18,6 @@ unwrap_unused = "deny"
 [dependencies]
 
 [features]
-default = ["debug-print", "sci-notation"]
+default = []
 debug-print = []
 sci-notation = []

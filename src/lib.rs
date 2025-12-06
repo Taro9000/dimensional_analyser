@@ -42,8 +42,12 @@
 
 use std::fmt::{self, Display, Formatter};
 
-#[allow(unused)]
-use crate::{dimension::{ConversionExponentError, Dimension, UnconvertableDimensionsError}, quantity::{DifferentDimensionError, UnconvertableQuantitiesError, UnconvertableQuantityError, Quantity}};
+use crate::{dimension::{ConversionExponentError, UnconvertableDimensionsError}, quantity::{DifferentDimensionError, UnconvertableQuantitiesError, UnconvertableQuantityError}};
+pub use dimension::Dimension;
+pub use quantity::Quantity;
+pub use dimension::DimensionalAnalysable;
+pub use quantity::DimensionalAnalysableQuantity;
+pub use dimensions::le_systeme_international_d_unites;
 
 pub mod quantity;
 pub mod dimension;

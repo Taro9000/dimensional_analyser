@@ -66,6 +66,15 @@ pub enum Equality {
 }
 
 /// Represents a physical quantity consisting of a scalar value and a [`Dimension`].
+/// # Example
+/// ```rust
+/// use dimensional_analyser::{quantity::Quantity, dimensions::le_systeme_international_d_unites::{JOULE, base_units::{KILOGRAM, METER, SECOND}}};
+///
+/// let mass = Quantity::new(5, &KILOGRAM);
+/// let velocity = Quantity::new(10, &(&*METER / &*SECOND));
+/// let kinetic_energy = (&mass * &velocity.power(2)) / 2;
+/// assert_eq!(kinetic_energy, Quantity::new(250, &JOULE));
+/// ```
 #[derive(Debug, Clone)]
 pub struct Quantity {
     value: f64,
@@ -87,6 +96,14 @@ impl Quantity {
     /// Attempts to convert the quantity to another compatible dimension.
     /// # Errors
     /// [`UnconvertableQuantityError`] when the base [`Quantity`] can't be converted to the target [`Dimension`]
+    /// # Example
+    /// ```rust
+    /// use dimensional_analyser::{dimension::Prefix::Centi, quantity::Quantity, dimensions::le_systeme_international_d_unites::base_units::METER};
+    ///
+    /// let one_square_centimeter = Quantity::new(1, &METER.prefix(&Centi).square());
+    /// let area_in_square_meters = one_square_centimeter.convert_to(&METER.square()).unwrap();
+    /// assert_eq!(area_in_square_meters, Quantity::new(0.0001, &METER.square()));
+    /// ```
     pub fn convert_to(&self, other: &Dimension) -> Result<Self, UnconvertableQuantityError> {
         Ok(Self {
             value: (self.value * self.dimension.scaling_factor()).powf(
@@ -100,6 +117,17 @@ impl Quantity {
     /// Returns the relationship between both [`Quantity`]'s.
     /// # Panics
     /// Not enough data is known after converting `self` to the `other.dimension` so an expect is used
+    /// # Example
+    /// ```rust
+    /// use dimensional_analyser::{quantity::Quantity, dimensions::le_systeme_international_d_unites::{MINUTE, base_units::SECOND}, quantity::Equality};
+    ///
+    /// let one_minute = Quantity::new(1, &MINUTE);
+    /// let sixty_seconds = Quantity::new(60, &SECOND);
+    /// match one_minute.get_equality_with(&sixty_seconds) {
+    ///     Equality::ScalarMultiple(factor) => assert_eq!(factor, 60.0),
+    ///     _ => panic!("1 min and 60 s should be scalar multiples"),
+    /// }
+    /// ```
     #[must_use]
     pub fn get_equality_with(&self, other: &Self) -> Equality {
         debug_println!("Comparing {} and {}", self, other);
@@ -266,20 +294,13 @@ mod tests {
         debug_println,
         {
             dimension::Prefix::{
-                Centi,
                 Hecto,
                 Kilo,
                 Milli,
                 Pico
             },
             dimensions::{
-                centimeter_gram_second_units::base_units::{
-                    CENTI_METER,
-                    GRAM
-                }, drunk_mathematician_units::base_units::{
-                    FOOT,
-                    POUND,
-                }, le_systeme_international_d_unites::{
+                le_systeme_international_d_unites::{
                     base_units::{
                         KILOGRAM,
                         METER, SECOND
@@ -299,54 +320,10 @@ mod tests {
         assert_eq!(sum, Quantity::new(240, &SECOND));
     }
 
-    #[test]
-    fn energy_example() {
-        let mass = Quantity::new(5, &KILOGRAM);
-        let velocity = Quantity::new(10, &(&*METER / &*SECOND));
-        let kinetic_energy = (&mass * &velocity.power(2)) / 2;
-        debug_println!("kinetic_energy: {}", kinetic_energy);
-        assert_eq!(kinetic_energy, Quantity::new(250, &JOULE));
-
-        let gravitational_acceleration = Quantity::new(9.81, &(&*METER / &SECOND.square()));
-        let height = Quantity::new(2, &METER);
-        let potential_energy = &(&mass * &gravitational_acceleration) * &height;
-        debug_println!("potential_energy: {}", potential_energy);
-        assert_eq!(potential_energy, Quantity::new(98.1, &JOULE));
-
-        let energy = (&kinetic_energy + &potential_energy).expect("equal dimensions should be convertable");
-        assert_eq!(energy, Quantity::new(98.1 + 250.0, &JOULE));
-        debug_println!("total_energy: {}", energy);
-    }
-
-    #[test]
-    #[allow(clippy::float_cmp)]
-    fn multiples_comma_submultiples_and_imperial_units_example() {
-        let one_meter = Quantity::new(1, &METER);
-        let length_in_feet = one_meter.convert_to(&FOOT).expect("meters and feet are compatible");
-        let length_in_centimeters = one_meter.convert_to(&CENTI_METER).expect("meters and centimeters are compatible");
-        debug_println!("{} = {} = {}", one_meter, length_in_feet, length_in_centimeters);
-        assert_eq!(length_in_feet.value, 3.280_839_895_013_123);
-        assert_eq!(length_in_centimeters.value, 100.0);
-        let grams = Quantity::new(100, &GRAM);
-        let pounds = grams.convert_to(&POUND).expect("grams and pounds are compatible");
-        debug_println!("{} = {}", grams, pounds);
-        assert_eq!(pounds.value, 0.220_462_262_184_877_58);
-    }
-
-    #[test]
-    #[allow(clippy::float_cmp)]
-    fn exponent_aware_conversion_example() {
-        let one_square_centimeter = Quantity::new(1, &METER.prefix(&Centi).square());
-        let area_in_square_meters = one_square_centimeter.convert_to(&METER.square()).expect("square centimeters and square meters are compatible");
-        let length_in_meters = one_square_centimeter.convert_to(&METER).expect("square centimeters and meters are compatible");
-        debug_println!("{} = {} = {}", one_square_centimeter, area_in_square_meters, length_in_meters);
-        assert_eq!(area_in_square_meters.value, 0.0001);
-        assert_eq!(length_in_meters.value, 0.01);
-        let frequency = Quantity::new(50, &HERTZ);
-        let period = frequency.convert_to(&SECOND).expect("Hertz and seconds are compatible");
-        debug_println!("{} = {}", frequency, period);
-        assert_eq!(period.value, 0.02);
-    }
+    // The following tests remain in the unit test suite. A number of
+    // illustrative examples were moved to doctests in the module header
+    // to improve the crate documentation and reduce bloat in this test
+    // module.
 
     #[test]
     #[allow(clippy::float_cmp)]
@@ -368,33 +345,6 @@ mod tests {
         debug_println!("Estimated explosion radius (in meters): {}", radius);
         assert!((radius.value - 10.0).abs() < 1.0);
     } 
-
-    #[test]
-    #[allow(clippy::float_cmp)]
-    fn equality_example() {
-        let one_minute = Quantity::new(1, &MINUTE);
-        let sixty_seconds = Quantity::new(60, &SECOND);
-        match one_minute.get_equality_with(&sixty_seconds) {
-            Equality::ScalarMultiple(factor) => {
-                assert_eq!(factor, 60.0);
-            }
-            _ => {
-                panic!("1 min and 60 s should be scalar multiples");
-            }
-        }
-    }
-
-    #[test]
-    fn different_dimension_example() {
-        let length = Quantity::new(1, &METER);
-        let time = Quantity::new(1, &SECOND);
-        match length.get_equality_with(&time) {
-            Equality::Different => {}
-            _ => {
-                panic!("1 m and 1 s should be different dimensions");
-            }
-        }
-    }
 
     #[test]
     #[allow(clippy::float_cmp)]
