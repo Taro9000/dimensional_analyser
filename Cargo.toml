@@ -8,7 +8,7 @@ license = "MIT"
 repository = "https://github.com/Taro9000/dimensional_analyser"
 documentation = "https://docs.rs/dimensional_analyser"
 keywords = ["dimensions", "units", "physics", "quantity", "conversion"]
-categories = ["science", "physics", "math"]
+categories = ["science", "mathematics"]
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1}
