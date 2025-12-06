@@ -1,23 +1,27 @@
+//! The Centimeter Gram Second system of units is a variant of the metric system.
+
 use crate::dimension;
 use crate::dimensions::centimeter_gram_second_units::base_units::{CENTI_METER, GRAM};
 use std::sync::LazyLock;
 use crate::dimension::Dimension;
 use crate::dimensions::le_systeme_international_d_unites::base_units::{KILOGRAM, METER, SECOND};
 
+/// Conatins the three base units.
 pub mod base_units {
-    use super::*;
+    use super::{dimension, KILOGRAM, METER, LazyLock, Dimension, SECOND};
     
-    dimension!(,1000,GRAM = KILOGRAM);
-    dimension!(CENTI_METER =,Centi METER);
+    dimension!(,1000,GRAM = KILOGRAM "`1000` in a [`KILOGRAM`]");
+    dimension!(CENTI_METER =,Centi METER "[`Centi`] [`METER`]");
     
+    /// The three base units.
     #[allow(dead_code)]
-    pub const BASE_UNITS: LazyLock<Box<[LazyLock<Dimension>]>> = LazyLock::new(|| [GRAM, CENTI_METER, SECOND].into());
+    pub static BASE_UNITS: LazyLock<Box<[&LazyLock<Dimension>]>> = LazyLock::new(|| [&GRAM, &CENTI_METER, &SECOND].into());
 }
 
 
-dimension!(DYNE = GRAM CENTI_METER SECOND^-2);
-dimension!(ERG = DYNE CENTI_METER); 
-dimension!(BAR = DYNE CENTI_METER^2);
+dimension!(DYNE = GRAM CENTI_METER SECOND^-2 "[`GRAM`] [`CENTI_METER`]s per [`SECOND`] square.");
+dimension!(ERG = DYNE CENTI_METER "[`DYNE`] [`CENTI_METER`]s"); 
+dimension!(BARYE = DYNE CENTI_METER^-2 "[`DYNE`]s per [`CENTI_METER`] square");
 
 
 #[cfg(test)]

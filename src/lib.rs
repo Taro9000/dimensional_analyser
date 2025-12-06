@@ -4,7 +4,7 @@
 //! 
 //! # Example usage
 //! ```
-//! use crate::dimensional_analyser::{dim, dimension::{Dimension, DIMENSIONLESS}, dimensions::le_systeme_international_d_unites::{base_units::{KILOGRAM, METER, SECOND}, HOUR, JOULE, MINUTE, LITER}, quantity::{DimensionalAnalysableQuantity, Quantity, Result}};
+//! use dimensional_analyser::{dim, dimension::{Dimension, DIMENSIONLESS}, dimensions::le_systeme_international_d_unites::{base_units::{KILOGRAM, METER, SECOND}, HOUR, JOULE, MINUTE, LITER}, quantity::{DimensionalAnalysableQuantity, Quantity, Result}};
 //! fn main() -> Result<()> {
 //!     let height       = Quantity::new(5 , dim!(METER));
 //!     println!("Height:       {}", height);
@@ -37,13 +37,10 @@
 //!     Ok(())
 //! }
 //! ```
+#![warn(missing_docs)]
 
-#[warn(missing_docs)]
 pub mod quantity;
-#[warn(missing_docs)]
 pub mod dimension;
-#[warn(missing_docs)]
 mod bareiss_eliminator;
 
-#[warn(missing_docs)]
 pub mod dimensions;

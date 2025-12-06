@@ -1,25 +1,34 @@
+//! This interpretation of the natural units defines the universal constants plank units are derived from.
+
 use crate::{dimension, {dimension::{DeepDereferrenceable, DimensionalAnalysable}, dimensions::{le_systeme_international_d_unites::{JOULE, base_units::{AMPERE, KELVIN, KILOGRAM, METER, SECOND}}, natural_units::base_units::BASE_UNITS, the_seven_c_s::base_units::{C_AS_THE_SPEED_OF_LIGHT, COULOMB}}}};
 use std::{f64::consts::PI, sync::LazyLock};
 use crate::dimension::Dimension;
 
+/// Contains the five fundamental physical constants used as base units.
 pub mod base_units {
-    use super::*;
-    dimension!(REDUCED_PLANCK_CONSTANT =;1.054_571_817e-34;JOULE SECOND);
-    dimension!(GRAVITATIONAL_CONSTANT =;6.674_30e-11;METER^3 KILOGRAM^-1 SECOND^-2);
-    dimension!(VACUUM_PERMITTIVITY =;8.854_187_8188e-12;SECOND^4 KILOGRAM^-1 METER^-3 AMPERE^2);
-    dimension!(BOLTZMANN_CONSTANT =;1.380_649e-23;JOULE KELVIN^-1);
+    use super::{dimension, JOULE, SECOND, METER, KILOGRAM, AMPERE, KELVIN, LazyLock, Dimension, C_AS_THE_SPEED_OF_LIGHT};
     
+    dimension!(REDUCED_PLANCK_CONSTANT =;1.054_571_817e-34;JOULE SECOND "ℏ (h-bar).");
+    dimension!(GRAVITATIONAL_CONSTANT =;6.674_30e-11;METER^3 KILOGRAM^-1 SECOND^-2  "G, Newton's gravitational constant.");
+    dimension!(VACUUM_PERMITTIVITY =;8.854_187_818_8e-12;SECOND^4 KILOGRAM^-1 METER^-3 AMPERE^2 "ε₀");
+    dimension!(BOLTZMANN_CONSTANT =;1.380_649e-23;JOULE KELVIN^-1 "`k_B`");
+    
+    /// The five fundamental constants as base units.
     #[allow(dead_code)]
-    pub const BASE_UNITS: LazyLock<Box<[LazyLock<Dimension>]>> = LazyLock::new(|| [
-        C_AS_THE_SPEED_OF_LIGHT, REDUCED_PLANCK_CONSTANT, GRAVITATIONAL_CONSTANT,
-        VACUUM_PERMITTIVITY, BOLTZMANN_CONSTANT
+    pub static BASE_UNITS: LazyLock<Box<[&LazyLock<Dimension>]>> = LazyLock::new(|| [
+        &C_AS_THE_SPEED_OF_LIGHT, &REDUCED_PLANCK_CONSTANT, &GRAVITATIONAL_CONSTANT,
+        &VACUUM_PERMITTIVITY, &BOLTZMANN_CONSTANT
     ].into());
 }
 
-dimension!(,137.035999177,FINE_STRUCTURE_CONSTANT =);
-dimension!(DERIVED_CHARGE = BASE_UNITS.get().product_of_powers(&BASE_UNITS.get().exponents_to(&*COULOMB).expect("Convertible")));
-dimension!(PLANK_CHARGE =;(4.0 * PI).sqrt();DERIVED_CHARGE);
-dimension!(ELEMENTARY_CHARGE = PLANK_CHARGE FINE_STRUCTURE_CONSTANT^0.5);
+dimension!(,137.035_999_177,FINE_STRUCTURE_CONSTANT = "(alpha), the dimensionless coupling constant.");
+dimension!(
+    DERIVED_CHARGE
+    = BASE_UNITS.get().product_of_powers(&BASE_UNITS.get().exponents_to(&COULOMB).expect("Convertible"))
+    => "Charge unit derived from the five fundamental constants."
+);
+dimension!(PLANK_CHARGE =;(4.0 * PI).sqrt();DERIVED_CHARGE "Charge in Planck units.");
+dimension!(ELEMENTARY_CHARGE = PLANK_CHARGE FINE_STRUCTURE_CONSTANT^0.5 "e, the charge of an electron/proton.");
 
 #[cfg(test)]
 mod tests {

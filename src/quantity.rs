@@ -3,7 +3,6 @@
 use crate::{debug_println, uwrite};
 use crate::dimension::{Dimension, DimensionError, DimensionalAnalysable, DIMENSIONLESS};
 use core::fmt;
-use std::f32::EPSILON;
 use std::fmt::{Display, Formatter};
 use std::iter::Product;
 use std::ops::{Add, Div, Mul, Sub};
@@ -77,6 +76,7 @@ impl Quantity {
         Self { value: value.into(), dimension: dimension.clone() }
     }
     /// Raises the quantity to the specified power.
+    #[must_use]
     pub fn power<T: Into<f64> + Copy>(&self, exponent: T) -> Self {
         Self {
             value: self.value.powf(exponent.into()),
@@ -100,57 +100,57 @@ impl Quantity {
         }
     }
     /// Returns the relationship between both [`Quantity`]'s.
+    /// # Panics
+    /// Not enough data is known after converting `self` to the `other.dimension` so an expect is used
+    #[must_use]
     pub fn get_equality_with(&self, other: &Self) -> Equality {
         debug_println!("Comparing {} and {}", self, other);
         if self == other {
             return Equality::Identical;
         }
-        match self.convert_to(&other.dimension) {
-            Ok(converted) => {
-                debug_println!("Converted to: {}", converted);
-                if &converted != other {
-                    return Equality::Different;
-                } else if [&self.dimension, &other.dimension].have_same_exponents() {
-                    return Equality::ScalarMultiple(self.dimension.scaling_factor() / other.dimension.scaling_factor());
-                } else {
-                    let exponent = self.dimension.get_conversion_exponent(&other.dimension).expect("Should have an exponent if we got here");
-                    return Equality::PowerProyection(exponent);
-                }
+        self.convert_to(&other.dimension).map_or(Equality::Different, |converted| {
+            debug_println!("Converted to: {}", converted);
+            if &converted != other {
+                Equality::Different
+            } else if [&self.dimension, &other.dimension].have_same_exponents() {
+                Equality::ScalarMultiple(self.dimension.scaling_factor() / other.dimension.scaling_factor())
+            } else {
+                let exponent = self.dimension.get_conversion_exponent(&other.dimension).expect("Should have an exponent if we got here");
+            Equality::PowerProyection(exponent)
             }
-            Err(_) => return Equality::Different
-        }
+        })
     }
     /// Helper function to print how both [`Quantity`]'s are related.
     pub fn show_comparizon_results_with(&self, other: &Self) {
         match self.get_equality_with(other) {
             Equality::Identical => {
-                println!("{} and {} are identical", self, other);
+                println!("{self} and {other} are identical");
             }
             Equality::ScalarMultiple(factor) => {
-                println!("{} and {} are scalar multiples (factor {})", self, other, factor);
+                println!("{self} and {other} are scalar multiples (factor {factor})");
             }
             Equality::PowerProyection(exponent) => {
-                println!("{} and {} are power symmetric (exponent {})", self, other, exponent);
+                println!("{self} and {other} are power symmetric (exponent {exponent})");
             }
             Equality::Different => {
-                println!("{} and {} are different dimensions", self, other);
+                println!("{self} and {other} are different dimensions");
             }
         }
     }
 }
 impl PartialEq for Quantity {
     fn eq(&self, other: &Self) -> bool {
-        (self.dimension == other.dimension) && (self.value / other.value - 1.0).abs() < (EPSILON as f64)
+        (self.dimension == other.dimension) && (self.value / other.value - 1.0).abs() < f64::from(f32::EPSILON)
     }
 }
 /// A helper struct to show multiple [`Quantity`]'s is a concise manner.
 pub struct Quantities<'a>(pub &'a Vec<Quantity>);
-impl<'a> Display for Quantities<'a> {
+impl Display for Quantities<'_> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         write!(f, "[{}]", self
             .0
             .iter()
-            .map(|d| format!("{}", d))
+            .map(|d| format!("{d}"))
             .collect::<Vec<_>>()
             .join(", ")
         )
@@ -172,9 +172,9 @@ impl Mul for &Quantity {
     }
 }
 impl<T: Into<f64>> Mul<T> for Quantity {
-    type Output = Quantity;
+    type Output = Self;
     fn mul(self, rhs: T) -> Self::Output {
-        Quantity {
+        Self {
             value: self.value * rhs.into(),
             dimension: self.dimension,
         }
@@ -190,9 +190,9 @@ impl Div for &Quantity {
     }
 }
 impl<T: Into<f64>> Div<T> for Quantity {
-    type Output = Quantity;
+    type Output = Self;
     fn div(self, rhs: T) -> Self::Output {
-        Quantity {
+        Self {
             value: self.value / rhs.into(),
             dimension: self.dimension,
         }
@@ -231,7 +231,8 @@ impl Sub for &Quantity {
 }
 impl Product for Quantity {
     fn product<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(Quantity::new(1.0, &*DIMENSIONLESS), |acc, x| &acc * &x)
+        #[allow(clippy::borrow_interior_mutable_const)]
+        iter.fold(Self::new(1.0, &DIMENSIONLESS), |acc, x| &acc * &x)
     }
 }
 
@@ -254,7 +255,7 @@ impl DimensionalAnalysableQuantity for [&Quantity] {
                 )
             }
             Err(error) => {
-                Err(QuantityError::UnconvertableQuantitiesError { base_quantities: self.iter().cloned().cloned().collect(), dimension_error: error })
+                Err(QuantityError::UnconvertableQuantitiesError { base_quantities: self.iter().copied().cloned().collect(), dimension_error: error })
             }
         }
     }
@@ -288,67 +289,88 @@ mod tests {
 
     #[test]
     fn test_add() {
-        let lhs = Quantity::new(120, &*SECOND);
-        let rhs = Quantity::new(2, &*MINUTE).convert_to(&lhs.dimension).expect("Seconds and minutes are compatible");
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let lhs = Quantity::new(120, &SECOND);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let rhs = Quantity::new(2, &MINUTE).convert_to(&lhs.dimension).expect("Seconds and minutes are compatible");
         let sum = &lhs + &rhs;
         assert!(sum.is_ok());
         let sum = sum.unwrap();
-        assert_eq!(sum, Quantity::new(240, &*SECOND));
+        assert_eq!(sum, Quantity::new(240, #[allow(clippy::borrow_interior_mutable_const)] &SECOND));
     }
 
     #[test]
     fn energy_example() {
-        let mass = Quantity::new(5, &*KILOGRAM);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let mass = Quantity::new(5, &KILOGRAM);
+        #[allow(clippy::borrow_interior_mutable_const)]
         let velocity = Quantity::new(10, &(&*METER / &*SECOND));
         let kinetic_energy = (&mass * &velocity.power(2)) / 2;
         debug_println!("kinetic_energy: {}", kinetic_energy);
-        assert_eq!(kinetic_energy, Quantity::new(250, &*JOULE));
+        assert_eq!(kinetic_energy, Quantity::new(250, #[allow(clippy::borrow_interior_mutable_const)] &JOULE));
 
+        #[allow(clippy::borrow_interior_mutable_const)]
         let gravitational_acceleration = Quantity::new(9.81, &(&*METER / &SECOND.square()));
-        let height = Quantity::new(2, &*METER);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let height = Quantity::new(2, &METER);
         let potential_energy = &(&mass * &gravitational_acceleration) * &height;
         debug_println!("potential_energy: {}", potential_energy);
-        assert_eq!(potential_energy, Quantity::new(98.1, &*JOULE));
+        assert_eq!(potential_energy, Quantity::new(98.1, #[allow(clippy::borrow_interior_mutable_const)] &JOULE));
 
         let energy = (&kinetic_energy + &potential_energy).expect("equal dimensions should be convertable");
-        assert_eq!(energy, Quantity::new(98.1 + 250.0, &*JOULE));
+        assert_eq!(energy, Quantity::new(98.1 + 250.0, #[allow(clippy::borrow_interior_mutable_const)] &JOULE));
         debug_println!("total_energy: {}", energy);
     }
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn multiples_comma_submultiples_and_imperial_units_example() {
-        let one_meter = Quantity::new(1, &*METER);
-        let length_in_feet = one_meter.convert_to(&*FOOT).expect("meters and feet are compatible");
-        let length_in_centimeters = one_meter.convert_to(&*CENTI_METER).expect("meters and centimeters are compatible");
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let one_meter = Quantity::new(1, &METER);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let length_in_feet = one_meter.convert_to(&FOOT).expect("meters and feet are compatible");
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let length_in_centimeters = one_meter.convert_to(&CENTI_METER).expect("meters and centimeters are compatible");
         debug_println!("{} = {} = {}", one_meter, length_in_feet, length_in_centimeters);
-        assert_eq!(length_in_feet.value, 3.28084);
+        assert_eq!(length_in_feet.value, 3.280_839_895_013_123);
         assert_eq!(length_in_centimeters.value, 100.0);
 
-        let grams = Quantity::new(100, &*GRAM);
-        let pounds = grams.convert_to(&*POUND).expect("grams and pounds are compatible");
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let grams = Quantity::new(100, &GRAM);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let pounds = grams.convert_to(&POUND).expect("grams and pounds are compatible");
         debug_println!("{} = {}", grams, pounds);
-        assert_eq!(pounds.value, 0.220462);
+        assert_eq!(pounds.value, 0.220_462_262_184_877_58);
     }
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn exponent_aware_conversion_example() {
-        let one_square_centimeter = Quantity::new(1, &METER.prefix(Centi).square());
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let one_square_centimeter = Quantity::new(1, &METER.prefix(&Centi).square());
+        #[allow(clippy::borrow_interior_mutable_const)]
         let area_in_square_meters = one_square_centimeter.convert_to(&METER.square()).expect("square centimeters and square meters are compatible");
+        #[allow(clippy::borrow_interior_mutable_const)]
         let length_in_meters = one_square_centimeter.convert_to(&METER).expect("square centimeters and meters are compatible");
         debug_println!("{} = {} = {}", one_square_centimeter, area_in_square_meters, length_in_meters);
         assert_eq!(area_in_square_meters.value, 0.0001);
         assert_eq!(length_in_meters.value, 0.01);
 
-        let frequency = Quantity::new(50, &*HERTZ);
-        let period = frequency.convert_to(&*SECOND).expect("Hertz and seconds are compatible");
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let frequency = Quantity::new(50, &HERTZ);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let period = frequency.convert_to(&SECOND).expect("Hertz and seconds are compatible");
         debug_println!("{} = {}", frequency, period);
         assert_eq!(period.value, 0.02);
     }
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn curseder_units_optic_fiber_example() {
-        let pulse_broadening = Quantity::new(1.2, &(&SECOND.prefix(Pico) / &METER.prefix(Kilo).power(0.5)));
-        let propagation_distance = Quantity::new(100, &(METER.prefix(Kilo)));
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let pulse_broadening = Quantity::new(1.2, &(&SECOND.prefix(&Pico) / &METER.prefix(&Kilo).power(0.5)));
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let propagation_distance = Quantity::new(100, &(METER.prefix(&Kilo)));
 
         let total_spread = &pulse_broadening * &propagation_distance.power(0.5);
         debug_println!("Total pulse spread (in picoseconds): {}", total_spread);
@@ -357,19 +379,26 @@ mod tests {
 
     #[test]
     fn bomb_explosion_radius_example() {
-        let energy = Quantity::new(100_000, &*JOULE);
-        let explosion_time = Quantity::new(1, &*SECOND);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let energy = Quantity::new(100_000, &JOULE);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let explosion_time = Quantity::new(1, &SECOND);
+        #[allow(clippy::borrow_interior_mutable_const)]
         let air_density = Quantity::new(1, &(&*KILOGRAM / &METER.cube()));
 
+        #[allow(clippy::borrow_interior_mutable_const)]
         let radius = (&(&energy / &air_density) * &explosion_time.power(2.0)).convert_to(&METER).expect("Resulting dimension should be length");
         debug_println!("Estimated explosion radius (in meters): {}", radius);
         assert!((radius.value - 10.0).abs() < 1.0);
     } 
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn equality_example() {
-        let one_minute = Quantity::new(1, &*MINUTE);
-        let sixty_seconds = Quantity::new(60, &*SECOND);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let one_minute = Quantity::new(1, &MINUTE);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let sixty_seconds = Quantity::new(60, &SECOND);
         match one_minute.get_equality_with(&sixty_seconds) {
             Equality::ScalarMultiple(factor) => {
                 assert_eq!(factor, 60.0);
@@ -382,8 +411,10 @@ mod tests {
 
     #[test]
     fn different_dimension_example() {
-        let length = Quantity::new(1, &*METER);
-        let time = Quantity::new(1, &*SECOND);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let length = Quantity::new(1, &METER);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let time = Quantity::new(1, &SECOND);
         match length.get_equality_with(&time) {
             Equality::Different => {}
             _ => {
@@ -393,9 +424,12 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn complex_equalty_example() {
-        let hectareas = Quantity::new(100, &METER.prefix(Hecto).square());
-        let length = Quantity::new(1_000_000, &METER.prefix(Milli));
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let hectareas = Quantity::new(100, &METER.prefix(&Hecto).square());
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let length = Quantity::new(1_000_000, &METER.prefix(&Milli));
         match length.get_equality_with(&hectareas) {
             Equality::PowerProyection(exponent) => {
                 assert_eq!(exponent, 2.0);
@@ -407,9 +441,12 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::float_cmp)]
     fn another_contrived_example() {
-        let frequency = Quantity::new(2, &HERTZ.prefix(Kilo));
-        let period = Quantity::new(0.5, &SECOND.prefix(Milli)).power(2);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let frequency = Quantity::new(2, &HERTZ.prefix(&Kilo));
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let period = Quantity::new(0.5, &SECOND.prefix(&Milli)).power(2);
         match frequency.get_equality_with(&period) {
             Equality::PowerProyection(exponent) => {
                 assert_eq!(exponent, -2.0);
@@ -422,8 +459,10 @@ mod tests {
     
     #[test]
     fn incompatible_addition_example() {
-        let length = Quantity::new(1, &*METER);
-        let time = Quantity::new(1, &*SECOND);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let length = Quantity::new(1, &METER);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let time = Quantity::new(1, &SECOND);
         let result = &length + &time;
         assert!(result.is_err());
         debug_println!("Error message: {}", result.err().unwrap());
@@ -431,11 +470,15 @@ mod tests {
 
     #[test]
     fn bomb_explosion_radius_example_as_dimensional_analysis() {
-        let energy = Quantity::new(100_000, &*JOULE);
-        let explosion_time = Quantity::new(1, &*SECOND);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let energy = Quantity::new(100_000, &JOULE);
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let explosion_time = Quantity::new(1, &SECOND);
+        #[allow(clippy::borrow_interior_mutable_const)]
         let air_density = Quantity::new(1, &(&*KILOGRAM / &METER.power(3)));
 
-        let radius = [&energy, &explosion_time, &air_density].convert_to(&*METER).expect("Units to be convertible");
+        #[allow(clippy::borrow_interior_mutable_const)]
+        let radius = [&energy, &explosion_time, &air_density].convert_to(&METER).expect("Units to be convertible");
         debug_println!("Estimated explosion radius (in meters): {}", radius);
         assert!((radius.value - 10.0).abs() < 1.0);
     } 
@@ -443,6 +486,7 @@ mod tests {
     #[test]
     fn unordered_but_equal() {
         let letter = Dimension::new("letter");
+        #[allow(clippy::borrow_interior_mutable_const)]
         let minute = &*MINUTE;
         let typing_speed_a = Quantity::new(24, &(&letter * &minute.inverse()));
         let typing_speed_b = Quantity::new(24, &(&minute.inverse() * &letter));
@@ -452,6 +496,7 @@ mod tests {
     #[test]
     fn unordered_but_identical() {
         let letter = Dimension::new("letter");
+        #[allow(clippy::borrow_interior_mutable_const)]
         let minute = &*MINUTE;
         let typing_speed_a = Quantity::new(24, &(&letter * &minute.inverse()));
         let typing_speed_b = Quantity::new(24, &(&minute.inverse() * &letter));
@@ -462,6 +507,7 @@ mod tests {
     fn unordered_scalar_multiples() {
         let letter = Dimension::new("letter");
         let word = letter.scale(5);
+        #[allow(clippy::borrow_interior_mutable_const)]
         let minute = &*MINUTE;
         let typing_speed_a = Quantity::new(24, &(&word * &minute.inverse()));
         let typing_speed_b = Quantity::new(120, &(&minute.inverse() * &letter));
@@ -472,6 +518,7 @@ mod tests {
     fn unordered_power_proyections() {
         let letter = Dimension::new("letter");
         let word = letter.scale(5);
+        #[allow(clippy::borrow_interior_mutable_const)]
         let minute = &*MINUTE;
         let typing_speed_a = Quantity::new(24, &(&word * &minute.inverse()));
         let typing_speed_b = typing_speed_a.power(0.3);
@@ -479,12 +526,14 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::borrow_interior_mutable_const)]
+    #[allow(clippy::float_cmp)]
     fn conversion_with_different_multipliers() {
         let dollar = Dimension::new("dollar");
         let money_gained = Quantity::new(40, &dollar);
-        let match_duration = Quantity::new(7, &*MINUTE);
+        let match_duration = Quantity::new(7, &MINUTE);
         let salary = [&money_gained, &match_duration].convert_to(&(&dollar / &*HOUR)).expect("Convertable");
         assert_eq!(salary.dimension, &dollar / &*HOUR);
-        assert_eq!(salary.value, 3.428571428571428e2);
+        assert_eq!(salary.value, 3.428_571_428_571_428e2);
     }
 }

@@ -1,8 +1,7 @@
 use std::error::Error;
-use std::f32::EPSILON;
 use std::fmt::{Display, Formatter, self};
 use std::iter::{once, Product};
-use std::ops::{Deref, Div, Mul};
+use std::ops::{Div, Mul};
 use std::result;
 pub use std::sync::LazyLock;
 
@@ -89,7 +88,7 @@ pub enum Prefix {
 }
 
 /// Represents a physical derived dimension (e.g., length, acceleration, psi).
-/// A [`Dimension`] combines a scalar `scaling_factor` and a set of unordered, unnormalized named `exponents``.
+/// A [`Dimension`] combines a scalar `scaling_factor` and a set of unordered, unnormalized named `exponents`.
 #[derive(Debug, Clone)]
 pub struct Dimension {
     scaling_factor: f64,
@@ -97,14 +96,17 @@ pub struct Dimension {
 }
 impl Dimension {
     /// Returns the [`Dimension`]’s `scaling_factor`.
-    pub fn scaling_factor(&self) -> &f64 {
+    #[must_use]
+    pub const fn scaling_factor(&self) -> &f64 {
         &self.scaling_factor
     }
     /// Returns the [`Dimension`]’s base exponents.
-    pub fn exponents(&self) -> &Box<[(String, f64)]> {
+    #[must_use]
+    pub const fn exponents(&self) -> &[(String, f64)] {
         &self.exponents
     }
     /// Creates a new base [`Dimension`] with a single exponent equal to `1.0` and a `scaling_factor` of `1.0`.
+    #[must_use]
     pub fn new(name: &str) -> Self {
         Self {
             scaling_factor: 1.0,
@@ -113,8 +115,9 @@ impl Dimension {
     }
 
     /// Raises the [`Dimension`] to an arbitrary power.
+    #[must_use]
     pub fn power<T: Into<f64> + Copy>(&self, exponent: T) -> Self {
-        Dimension {
+        Self {
             scaling_factor: self.scaling_factor.powf(exponent.into()),
             exponents: self.exponents.iter().map(|current_exponent| {
                 let scaled = current_exponent.1 * exponent.into();
@@ -123,32 +126,39 @@ impl Dimension {
         }
     }
     /// Returns the cube of the [`Dimension`].
+    #[must_use]
     pub fn cube(&self) -> Self {
         self.power(3)
     }
     /// Returns the square of the [`Dimension`].
+    #[must_use]
     pub fn square(&self) -> Self {
         self.power(2)
     }
     /// Returns the square root of the [`Dimension`].
+    #[must_use]
     pub fn square_root(&self) -> Self {
         self.power(0.5)
     }
     /// Returns the multiplicative inverse (reciprocal) of the [`Dimension`].
+    #[must_use]
     pub fn inverse(&self) -> Self {
         self.power(-1)
     }
 
     /// Returns a portion of the [`Dimension`] divided by the given scalar.
+    #[must_use]
     pub fn portion<T: Into<f64>>(&self, divisor: T) -> Self {
         Self { scaling_factor: self.scaling_factor / divisor.into(), ..self.clone() }
     }
     /// Returns a scaled version of the [`Dimension`] multiplied by the given scalar.
+    #[must_use]
     pub fn scale<T: Into<f64>>(&self, scaling_factor: T) -> Self {
         Self { scaling_factor: self.scaling_factor * scaling_factor.into(), ..self.clone() }
     }
     /// Applies a metric prefix.
-    pub fn prefix(&self, prefix: Prefix) -> Self {
+    #[must_use]
+    pub fn prefix(&self, prefix: &Prefix) -> Self {
         self.scale(match prefix {
             Prefix::Quetta=> 1e30,
             Prefix::Ronna => 1e27,
@@ -183,6 +193,7 @@ impl Dimension {
         let exponent: f64 = loop {
             match unit_iter.next() {
                 Some((left, right)) => {
+                    #[allow(clippy::float_cmp)]
                     if left != &0.0 && right != &0.0 {
                         break right / left
                     }
@@ -195,25 +206,17 @@ impl Dimension {
                 }
             }
         };
-        loop {
-            match unit_iter.next() {
-                Some((&left, &right)) => {
-                    if left != 0.0 && right != 0.0 {
-                        if right / left != exponent {
-                            return Err(DimensionError::InconsistentExponentRatio {
-                                left_dimension: self.clone(),
-                                right_dimension: other.clone(),
-                                right,
-                                left,
-                                expected: exponent,
-                                found: right / left
-                            });
-                        }
-                    }
-                }
-                None => {
-                    break;
-                }
+        for (&left, &right) in unit_iter {
+            #[allow(clippy::float_cmp)]
+            if left != 0.0 && right != 0.0 && right / left != exponent {
+                return Err(DimensionError::InconsistentExponentRatio {
+                    left_dimension: self.clone(),
+                    right_dimension: other.clone(),
+                    right,
+                    left,
+                    expected: exponent,
+                    found: right / left
+                });
             }
         };
         Ok(exponent)
@@ -222,18 +225,18 @@ impl Dimension {
 impl PartialEq for Dimension {
     fn eq(&self, other: &Self) -> bool {
         let exponents = [self, other].exponents();
-        (exponents[0] == exponents[1]) && (self.scaling_factor / other.scaling_factor - 1.0).abs() < (EPSILON as f64)
+        (exponents[0] == exponents[1]) && (self.scaling_factor / other.scaling_factor - 1.0).abs() < (f64::from(f32::EPSILON))
     }
 }
 
 /// A helper struct to show multiple [`Dimension`]s is a concise manner.
 pub struct Dimensions<'a>(pub &'a Vec<Dimension>);
-impl<'a> std::fmt::Display for Dimensions<'a> {
+impl std::fmt::Display for Dimensions<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[{}]", self
             .0
             .iter()
-            .map(|d| format!("{}", d))
+            .map(|d| format!("{d}"))
             .collect::<Vec<_>>()
             .join(", ")
         )
@@ -259,18 +262,20 @@ macro_rules! uwrite {
 }
 impl Display for Dimension {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        #[allow(clippy::float_cmp)]
         if self.scaling_factor != 1.0 {
-            uwrite!(f, "* {} ", self.scaling_factor)?
+            uwrite!(f, "* {} ", self.scaling_factor)?;
         }
         write!(f, "{}", self
             .exponents
             .iter()
-            .filter(|(_, unit)| unit != &0.0)
+            .filter(#[allow(clippy::float_cmp)] |(_, unit)| unit != &0.0)
             .map(|(name, unit)| {
-                if unit != &1.0 {
-                    format!("{}^{}", name, unit)
+                #[allow(clippy::float_cmp)]
+                if unit == &1.0 {
+                    name.to_string()
                 } else {
-                    format!("{}", name)
+                    format!("{name}^{unit}")
                 }
             })
             .collect::<Vec<_>>()
@@ -326,9 +331,9 @@ pub trait DeepDereferrenceable {
     /// Converts to a usable format for the rest of the API.
     fn get(&self) -> Box<[&Dimension]>;
 }
-impl DeepDereferrenceable for LazyLock<Box<[LazyLock<Dimension>]>> {
+impl DeepDereferrenceable for LazyLock<Box<[&LazyLock<Dimension>]>> {
     fn get(&self) -> Box<[&Dimension]> {
-        self.iter().map(|dimension| dimension.deref()).collect()
+        self.iter().map(|&dimension| &**dimension).collect()
     }
 }
 
@@ -377,7 +382,7 @@ impl DimensionalAnalysable for [&Dimension] {
                 }
             }
         }
-        exponent_matrix.into_iter().map(|exponent_row| exponent_row.into()).collect()
+        exponent_matrix.into_iter().map(Into::into).collect()
     }
     fn have_same_exponents(&self) -> bool {
         if self.is_empty() {
@@ -388,19 +393,19 @@ impl DimensionalAnalysable for [&Dimension] {
         all_exponents.iter().all(|exponents| exponents == first_exponents)
     }
     fn exponents_to(&self, other: &Dimension) -> Result<Box<[f64]>> {
-        let dimension: Box<[&Dimension]> = self.iter().map(|&quantity| quantity).chain(once(other)).collect();
+        let dimension: Box<[&Dimension]> = self.iter().chain(once(&other)).copied().collect();
         let rows: Box<[Box<[f64]>]> = dimension.exponents();
         let unconvertable_dimensions_error = |error|
             DimensionError::UnconvertableDimensionsError {
-                base_dimensions: self.iter().cloned().cloned().collect(),
+                base_dimensions: self.iter().copied().cloned().collect(),
                 target_dimension: other.clone(),
                 bareiss_eliminator_error: error,
             };
         RectangularMatrix::try_from(rows)
-            .or_else(|error| Err(unconvertable_dimensions_error(error)))?
+            .map_err(unconvertable_dimensions_error)?
             .switch_dimensions()
             .bareiss_solve()
-            .or_else(|error| Err(unconvertable_dimensions_error(error)))
+            .map_err(unconvertable_dimensions_error)
     }
     fn all_exponents_to(&self, others: &[&Dimension]) -> Result<Box<[Box<[f64]>]>> {
         others.iter().map(|other| self.exponents_to(other)).collect()
@@ -445,7 +450,7 @@ mod tests {
     #[test]
     fn kilograms_and_grams() {
         let lhs = &*KILOGRAM;
-        let rhs = &GRAM.prefix(Kilo);
+        let rhs = &GRAM.prefix(&Kilo);
         debug_println!("lhs:{}", lhs);
         debug_println!("rhs:{}", rhs);
         assert_eq!(lhs, rhs);
@@ -453,6 +458,7 @@ mod tests {
 }
 
 
+/// Returns the product of each [`Dimension`] optionally prefixed prefixed and then optionally raised to a power
 #[macro_export]
 macro_rules! product_of_powers {
     (
@@ -465,7 +471,7 @@ macro_rules! product_of_powers {
         $(
             .mul(
                 &$rest
-                    $(.prefix($crate::dimension::Prefix::$prefix))?
+                    $(.prefix(&$crate::dimension::Prefix::$prefix))?
                     $(.power($rest_exp))?
             )
         )*
@@ -475,6 +481,7 @@ macro_rules! product_of_powers {
 }
 
 #[macro_export]
+/// Reorganizes [`product_of_powers`] to be more easily used inside code
 macro_rules! dim {
     (
         $( ;$scaling_factor:expr; )?
@@ -490,30 +497,36 @@ macro_rules! dim {
 }
 
 #[macro_export]
+/// Creates a `static` [`LazyLock`][`Dimension`]
 macro_rules! dimension {
-    ($name:ident) => {
-        dimension!($name = $crate::dimension::Dimension::new(&stringify!($name).to_lowercase()));
+    ($name:ident $($doc:literal)?) => {
+        dimension!($name = $crate::dimension::Dimension::new(&stringify!($name).to_lowercase()) $(=> $doc)?);
     };
     (
         $( ,$divisor:expr, )?
         $name:ident =
         $( ;$scaling_factor:expr; )?
         $( $( ,$prefix:ident )? $rest:ident $( ^$rest_exp:literal )? )*
+        $($doc:literal)?
     ) => {
-        dimension!{$name = $crate::product_of_powers!(
-            $( ;$scaling_factor; )?
-            $( ,$divisor, )? ->
-            $( $( ,$prefix )? $rest $( ^$rest_exp )? )*
-        )
-        }
+        dimension!(
+            $name =
+            $crate::product_of_powers!(
+                $( ;$scaling_factor; )?
+                $( ,$divisor, )? ->
+                $( $( ,$prefix )? $rest $( ^$rest_exp )? )*
+            )
+            $(=> $doc)?
+        );
     };
-    ($name:ident = $unit:expr) => {
+    ($name:ident = $unit:expr $(=> $doc:literal)?) => {
+        $(#[doc=$doc])?
         #[allow(unused)]
-        pub const $name: std::sync::LazyLock<$crate::dimension::Dimension> = std::sync::LazyLock::new(|| $unit);
+        pub static $name: std::sync::LazyLock<$crate::dimension::Dimension> = std::sync::LazyLock::new(|| $unit);
     };
 }
 
 dimension!(DIMENSIONLESS = Dimension {
     scaling_factor: 1.0,
     exponents: Vec::new().into(),
-});
+} => "The [`Dimension`] of a plain number");
