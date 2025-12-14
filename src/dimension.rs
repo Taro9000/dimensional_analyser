@@ -221,8 +221,16 @@ impl Dimension {
         let exponent: f64 = loop {
             match unit_iter.next() {
                 Some((left, right)) => {
-                    if left.abs() > f64::from(f32::EPSILON) && right.abs() > f64::from(f32::EPSILON) {
+                    if left.abs() > f64::from(f32::EPSILON)
+                    && right.abs() > f64::from(f32::EPSILON) {
                         break right / left
+                    }
+                    if left.abs() > f64::from(f32::EPSILON)
+                    || right.abs() > f64::from(f32::EPSILON) {
+                        return Err(ConversionExponentError::NoNonZeroExponentPair {
+                            left_dimension: self.clone(),
+                            right_dimension: other.clone()
+                        })
                     }
                 }
                 None => {
@@ -234,7 +242,10 @@ impl Dimension {
             }
         };
         for (&left, &right) in unit_iter {
-            if left.abs() > f64::from(f32::EPSILON) && right != 0.0 && ((right / left / exponent) - 1.).abs() > f64::from(f32::EPSILON) {
+            if (left.abs() > f64::from(f32::EPSILON)
+            || right.abs() > f64::from(f32::EPSILON))
+            && ((right / left / exponent) - 1.).abs() > f64::from(f32::EPSILON)
+            {
                 return Err(ConversionExponentError::InconsistentExponentRatio {
                     left_dimension: self.clone(),
                     right_dimension: other.clone(),
@@ -297,7 +308,7 @@ impl Display for Dimension {
             .filter(|(_, unit)| unit.abs() > f64::from(f32::EPSILON))
             .map(|(name, unit)| {
                 if (unit - 1.0).abs() < f64::from(f32::EPSILON) {
-                    name.to_string()
+                    name.clone()
                 } else {
                     format!("{name}^{unit}")
                 }

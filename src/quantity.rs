@@ -384,6 +384,15 @@ mod tests {
         assert!(result.is_err());
         debug_println!("Error message: {}", result.err().unwrap());
     }
+    
+    #[test]
+    fn incompatible_conversion_example() {
+        let length = Quantity::new(1, &(&*METER / &*SECOND));
+        let time = &*SECOND;
+        let result = length.convert_to(time);
+        assert!(result.is_err());
+        debug_println!("Error message: {}", result.err().unwrap());
+    }
 
     #[test]
     fn bomb_explosion_radius_example_as_dimensional_analysis() {
