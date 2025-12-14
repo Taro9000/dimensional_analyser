@@ -234,7 +234,7 @@ impl Dimension {
             }
         };
         for (&left, &right) in unit_iter {
-            if left.abs() > f64::from(f32::EPSILON) && right != 0.0 && (dbg!(right / left / exponent) - 1.).abs() > f64::from(f32::EPSILON) {
+            if left.abs() > f64::from(f32::EPSILON) && right != 0.0 && ((right / left / exponent) - 1.).abs() > f64::from(f32::EPSILON) {
                 return Err(ConversionExponentError::InconsistentExponentRatio {
                     left_dimension: self.clone(),
                     right_dimension: other.clone(),
