@@ -105,6 +105,10 @@ impl RectangularMatrix {
     fn len(&self) -> usize {
         self.rows.len()
     }
+    #[allow(dead_code)]
+    fn split_at(&self, mid: usize) -> (&[List], &[List]) {
+        self.rows.split_at(mid)
+    }
     fn split_at_mut(&mut self, mid: usize) -> (&mut [List], &mut [List]) {
         self.rows.split_at_mut(mid)
     }

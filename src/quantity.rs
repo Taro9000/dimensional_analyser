@@ -289,7 +289,10 @@ impl DimensionalAnalysableQuantity for [&Quantity] {
                 base_quantities: self.iter().copied().cloned().collect(), dimension_error
             }
         )?.iter().enumerate().map(|(index, &power)| self[index].power(power)).product();
-        Ok(same_units.convert_to(other).expect("They should aready have the same units"))
+        Ok(Quantity{
+            value: same_units.value * same_units.dimension.scaling_factor() / other.scaling_factor(),
+            dimension: other.clone()
+        })
     }
     fn convertable_to(&self, others: &[&Dimension]) -> Result<Box<[Quantity]>, UnconvertableQuantitiesError> {
         others.iter().map(|other| self.convert_to(other)).collect()
@@ -299,23 +302,17 @@ impl DimensionalAnalysableQuantity for [&Quantity] {
 #[cfg(test)]
 mod tests {
     use crate::{
-        debug_println,
-        {
-            dimension::Prefix::{
+        debug_println, dim, dimension::Prefix::{
                 Hecto,
                 Kilo,
                 Milli,
                 Pico
-            },
-            dimensions::{
-                le_systeme_international_d_unites::{
-                    base_units::{
+            }, dimensions::{le_systeme_international_d_unites::{
+                    HERTZ, HOUR, JOULE, MINUTE, base_units::{
                         KILOGRAM,
                         METER, SECOND
-                    }, HERTZ, HOUR, JOULE, MINUTE
-                }
-            }, quantity::*
-        },
+                    }
+                }, the_seven_c_s::base_units::C_AS_THE_SPEED_OF_LIGHT}, quantity::*
     };
 
     #[test]
@@ -459,5 +456,20 @@ mod tests {
         let salary = [&money_gained, &match_duration].convert_to(&(&dollar / &*HOUR)).expect("Convertable");
         assert_eq!(salary.dimension, &dollar / &*HOUR);
         assert_eq!(salary.value, 3.428_571_428_571_428e2);
+    }
+
+    /*
+    "frecuencia"	"velocidad de la luz"	    "longitud de onda"
+    540[Tera.HERTZ]	1[C_AS_THE_SPEED_OF_LIGHT]	[A2, B2] => nano .meter
+    */
+    #[test]
+    fn wavelength_from_frequency_and_the_speed_of_light() {
+        let frequency = Quantity::new(540, dim!(,1,,Tera HERTZ));
+        let speed_of_light = Quantity::new(1, dim!(C_AS_THE_SPEED_OF_LIGHT));
+        let length = dim!(,1,,Nano METER);
+        let wavelength = [&frequency, &speed_of_light]
+            .convert_to(length)
+            .expect("Should be convertable");
+        assert_eq!(wavelength, Quantity::new(555.171_218_518_518_6, length));
     }
 }
