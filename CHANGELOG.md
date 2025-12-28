@@ -21,3 +21,10 @@
 ## 0.1.3
 
 - Added another test at src/quantity.rs to fix a logical error at the exponent obtainment at src/dimension.rs.
+
+## 0.2.0 - Revamped Scientific-notation Handling
+
+- Added another test at src/quantity.rs.
+- Removed an expect from the conversion of multiple quantities to a dimension.
+- Fixed voltage being watts per coulomb instead of joules per second.
+- **Removed** the sci-notation configuration to instead provide both Display and **LowerExp** traits
