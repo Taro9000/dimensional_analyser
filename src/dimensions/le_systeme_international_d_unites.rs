@@ -50,7 +50,7 @@ dimension!(WATT   = JOULE SECOND^-1 "[`JOULE`]s per [`SECOND`].");
 
 // Electricity
 dimension!(COULOMB = AMPERE SECOND "[`AMPERE`] [`SECOND`]s.");
-dimension!(VOLT    = WATT COULOMB^-1 "[`WATT`]s per [`COULOMB`].");
+dimension!(VOLT    = JOULE COULOMB^-1 "[`JOULE`]s per [`COULOMB`].");
 dimension!(OHM     = VOLT AMPERE^-1 "[`VOLT`]s per [`AMPERE`].");
 dimension!(TESLA   = KILOGRAM SECOND^-2 AMPERE^-1 "[`KILOGRAM`]s per [`SECOND`] squared per [`AMPERE`].");
 dimension!(WEBER   = TESLA METER^2 "[`TESLA`] [`METER`]s squared.");
