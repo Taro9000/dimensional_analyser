@@ -1,9 +1,9 @@
 //! Provides dimensional arithmetic and conversion between physical [`Quantity`]'s
 //! expressed in arbitrary units. Built on top of [`Dimension`].
-use crate::{debug_println, uwrite};
+use crate::{debug_println};
 use crate::dimension::{ConversionExponentError, DIMENSIONLESS, Dimension, UnconvertableDimensionsError, DimensionalAnalysable};
 use core::fmt;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, Formatter, LowerExp};
 use std::iter::Product;
 use std::ops::{Add, Div, Mul, Sub};
 use std::error::Error;
@@ -182,10 +182,18 @@ impl Display for Quantities<'_> {
         )
     }
 }
+impl LowerExp for Quantity {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let value = self.value;
+        let dimension = &self.dimension;
+        write!(f, "{value:e}[{dimension:e}]")
+    }
+}
 impl Display for Quantity {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        uwrite!(f, "{}", self.value)?;
-        write!(f, " {}", self.dimension)
+        let value = self.value;
+        let dimension = &self.dimension;
+        write!(f, "{value}[{dimension}]")
     }
 }
 impl Mul for &Quantity {

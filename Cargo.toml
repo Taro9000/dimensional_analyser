@@ -20,4 +20,3 @@ unwrap_unused = "deny"
 [features]
 default = []
 debug-print = []
-sci-notation = []

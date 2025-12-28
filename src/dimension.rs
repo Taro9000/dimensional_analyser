@@ -1,7 +1,7 @@
 //! Provides some arithmetic and conversion between [`Dimension`]'s expressed in arbitrary units.
 use core::f32;
 use std::error::Error;
-use std::fmt::{Display, Formatter, self};
+use std::fmt::{self, Display, Formatter, LowerExp};
 use std::iter::{once, Product};
 use std::ops::{Div, Mul};
 pub use std::sync::LazyLock;
@@ -281,28 +281,13 @@ impl Display for Dimensions<'_> {
 }
 
 
-#[cfg(feature = "sci-notation")]
-#[macro_export]
-/// A helper macro to show the numbers in scientific notation or not.
-macro_rules! uwrite {
-    ($f:expr, $fmt:literal, $($arg:expr),* $(,)?) => {
-        write!($f, $fmt, $(format!("{:e}", $arg)),*)
-    };
-}
-#[cfg(not(feature = "sci-notation"))]
-#[macro_export]
-/// A helper macro to show the numbers in scientific notation or not.
-macro_rules! uwrite {
-    ($f:expr, $fmt:literal, $($arg:expr),* $(,)?) => {
-        write!($f, $fmt, $($arg),*)
-    };
-}
-impl Display for Dimension {
+impl LowerExp for Dimension {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        if (self.scaling_factor - 1.0).abs() > f64::from(f32::EPSILON) {
-            uwrite!(f, "* {} ", self.scaling_factor)?;
-        }
-        write!(f, "{}", self
+        let scaling_factor = self.scaling_factor;
+        let scaling_iterator = once(Some(format!("{scaling_factor:e}"))
+            .filter(|_| (scaling_factor - 1.0).abs() > f64::from(f32::EPSILON)))
+            .flatten();
+        let exponent_iterator = self
             .exponents
             .iter()
             .filter(|(_, unit)| unit.abs() > f64::from(f32::EPSILON))
@@ -312,10 +297,34 @@ impl Display for Dimension {
                 } else {
                     format!("{name}^{unit}")
                 }
-            })
-            .collect::<Vec<_>>()
-            .join(" ")
-        )
+            });
+        let output = scaling_iterator.chain(exponent_iterator);
+        let output: Vec<_> = output.collect();
+        let output = output.join(" ");
+        write!(f, "{output}")
+    }
+}
+impl Display for Dimension {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let scaling_factor = self.scaling_factor;
+        let scaling_iterator = once(Some(format!("{scaling_factor}"))
+            .filter(|_| (scaling_factor - 1.0).abs() > f64::from(f32::EPSILON)))
+            .flatten();
+        let exponent_iterator = self
+            .exponents
+            .iter()
+            .filter(|(_, unit)| unit.abs() > f64::from(f32::EPSILON))
+            .map(|(name, unit)| {
+                if (unit - 1.0).abs() < f64::from(f32::EPSILON) {
+                    name.clone()
+                } else {
+                    format!("{name}^{unit}")
+                }
+            });
+        let output = scaling_iterator.chain(exponent_iterator);
+        let output: Vec<_> = output.collect();
+        let output = output.join(" ");
+        write!(f, "{output}")
     }
 }
 impl Mul for &Dimension {

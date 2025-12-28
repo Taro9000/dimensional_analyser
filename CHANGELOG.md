@@ -14,11 +14,9 @@
 
 - Updated the categories of the crate.
 
-
 ## 0.1.2
 
 - Removed the debugging macro.
-
 
 ## 0.1.3
 
